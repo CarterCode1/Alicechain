@@ -12,13 +12,13 @@
 
 void func(int sockfd, char* message)
 {
-	char buff[MAXLINE];
 	int n;
+	write(sockfd, message, 1024);
+	printf("Sent to Server : %s\n", message);
 
-		write(sockfd, message, sizeof(message));
-		bzero(buff, sizeof(buff));
-		read(sockfd, buff, sizeof(buff));
-		printf("From Server : %s", buff);
+	bzero(message, MAXLINE);
+	read(sockfd, message, sizeof(message));
+	printf("From Server : %s\n", message);
 
 }
 
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 		
 		if(i != argc -1)
 		{
-			strcat(tempString, "|");
+			strcat(tempString, " ");
 		}
 		strcat(sendBuffer, tempString );
 
