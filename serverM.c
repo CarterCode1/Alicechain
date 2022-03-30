@@ -15,14 +15,128 @@
 #define SA struct sockaddr
 
 
-struct Transaction {
+typedef struct  {
 	int transID;
 	char name[50];
 	double amount;
+} Transaction ;
+
+
+int numberOfTransactions = 0;
+
+void printTransactions(Transaction *transactions, int size)
+{
+	if(size >0)
+	{
+		for(int i = 0; i<size; i++)
+		{
+			printf("%d : %s : %f \n", transactions[i].transID, transactions[i].name, transactions[i].amount );
+		}
+	}
 }
 
-struct Transaction transactions[256]
+void SortTransactions(Transaction *transactions, int size)
+{
+    int i, j;
+    Transaction temp;
+    
+    for (i = 0; i < size - 1; i++)
+    {
+        for (j = 0; j < (size - 1-i); j++)
+        {
+            if (transactions[j].transID > transactions[j + 1].transID)
+            {
+                temp = transactions[j];
+                transactions[j] = transactions[j + 1];
+                transactions[j + 1] = temp;
+            } 
+        }
+    }
+}
 
+void addTransaction(Transaction *transaction, char* transString )
+{
+	char parseBuffer[MAXLINE];
+	const char seperator[2] = " ";
+	int i = 0;
+
+	int transID;
+	char sendName[50];
+	char recvName[50];
+	double amount;
+	
+	strcpy(parseBuffer, transString);
+	char* token = strtok(parseBuffer, seperator);
+
+	while(token != NULL )
+	{
+		if(i ==0){
+			transID = atoi(token);
+		}
+		if(i==1){
+			strcpy(sendName,  token);
+		}
+		if(i==2){
+			strcpy(recvName,  token);
+		}
+		if(i==3){
+			char *end;
+			amount = strtod(token, &end);
+			if(end==token){
+				printf("error\n");
+			}
+		}
+		i++;
+		token = strtok(NULL, seperator );
+
+
+	}
+	transaction[numberOfTransactions].transID = transID;
+	strcpy(transaction[numberOfTransactions].name, sendName );
+	transaction[numberOfTransactions].amount = - amount;
+	numberOfTransactions++;
+
+	transaction[numberOfTransactions].transID = transID;
+	strcpy(transaction[numberOfTransactions].name, recvName );
+	transaction[numberOfTransactions].amount =  amount;
+
+	numberOfTransactions++;
+}
+
+int calcTransBalance(Transaction *transactions, int size, char* accountName )
+{
+	int balance = 0;
+	int initialBalance = 1000;
+
+	if(size > 0)
+	{
+		for(int i = 0; i<size; i++)
+		{
+			if(strcmp(transactions[i].name, accountName) == 0)
+			{
+				balance += transactions[i].amount;
+			}
+		}
+	}
+	return initialBalance + balance;
+}
+
+bool isAccountValid(Transaction *transactions, int size, char* accountName )
+{
+	bool isValid = false;
+
+	if(size > 0)
+	{
+		for(int i = 0; i<size; i++)
+		{
+			if(strcmp(transactions[i].name, accountName) == 0)
+			{
+				isValid = true;
+			}
+		}
+	}
+	return isValid;
+}
 
 // Driver code
 int main() {
@@ -30,6 +144,9 @@ int main() {
 	bool isContinue = true;
 	int transactionId = -1;
 	int sockfd1;
+	Transaction transactions[256];
+
+
 	char buffer[MAXLINE];
 
 	struct sockaddr_in	 serv1addr;
@@ -50,7 +167,7 @@ int main() {
 
 	// Get transaction max id
 	char *loadTransData = "LoadTransData";
-	char maxTransBuffer1[MAXLINE];
+	char transBuffer1[MAXLINE];
 	char maxTransBuffer2[MAXLINE];
 	char maxTransBuffer3[MAXLINE];
 	char *ptr1, *ptr2, *ptr3;
@@ -58,21 +175,47 @@ int main() {
 	int length1, length2, length3;
 	int len1;
 
-	sendto(sockfd1, (const char *)maxTransactionReq, strlen(maxTransactionReq), 
+	sendto(sockfd1, (const char *)loadTransData, strlen(loadTransData), 
 		MSG_CONFIRM, (const struct serv1addr *) &serv1addr,
 		sizeof(serv1addr));
 
-	bzero(maxTransBuffer1, MAXLINE);
-	length1 = recvfrom(sockfd1, (char *)maxTransBuffer1, MAXLINE,
+
+	while(isContinue)
+	{
+		bzero(transBuffer1, MAXLINE);
+		length1 = recvfrom(sockfd1, (char *)transBuffer1, MAXLINE,
 				MSG_WAITALL, (struct serv1addr *) &serv1addr,
 				&len1);
 
-	maxTransBuffer1[length1] = '\0';
-	max1 = strtol(maxTransBuffer1, &ptr1 , 10);
-	printf("Max 1: %d\n", max1);
-	transactionId = max1;
+		transBuffer1[length1] = '\0';
 
+		if(strcmp( loadTransData, transBuffer1) == 0 ){
+			isContinue = false;
+		}
+		else {
+			addTransaction(transactions, transBuffer1);
+		}
 
+	}
+
+	printTransactions(transactions, numberOfTransactions );
+	printf("-----------\n");
+
+	SortTransactions(transactions, numberOfTransactions );
+	printTransactions(transactions, numberOfTransactions );
+	int balance = calcTransBalance(transactions, numberOfTransactions, "Chinmay" );
+
+	if(isAccountValid(transactions, numberOfTransactions, "Chinmay" ))
+	{
+		printf("True\n");
+	}
+
+	if(isAccountValid(transactions, numberOfTransactions, "Greg" ))
+	{
+		printf("True\n");
+	}
+
+	printf("Balance: %d\n", balance );
 
 	/*
 	//set up the  tcp socket to receive message

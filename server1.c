@@ -65,7 +65,7 @@ int main() {
 		
 		
 		// Request from ServerM to load initial data.
-		if(strcmp( loadTransDataloadTransData, buffer) == 0 )
+		if(strcmp( loadTransData, buffer) == 0 )
 		{
 			FILE *fp = fopen(filename, "r");
 			if (fp == NULL)
@@ -75,30 +75,29 @@ int main() {
     		}
 
 			char transaction[MAXLINE];
-			char *token;
-			char strMaxTransId[10];
+			printf("Exit:  %s", loadTransData );
+
 
 			while (fgets(transaction, MAXLINE, fp))
 			{
-				token = strtok(transaction, seperator);
-				int tokenInt = atoi(token);
-				if(tokenInt > maxTransId)
-				{
-					maxTransId = tokenInt;
-				}
-			}
-			sprintf(strMaxTransId, "%d", maxTransId);
+				//Send each transaction to middle server
+				printf("%s", transaction );
 
-			sendto(sockfd, (const char *)strMaxTransId, strlen(strMaxTransId),
-			MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-				len);
-			bzero(strMaxTransId, 10);
-			bzero(buffer, MAXLINE);
-			printf("Response message sent: %s.\n", strMaxTransId);
+				sendto(sockfd, (const char *)transaction, strlen(transaction),
+					MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
+				
+				bzero(transaction, MAXLINE);
+			}
+
+			printf("Exit: %s", loadTransData );
+			sendto(sockfd, (const char *)loadTransData, strlen(loadTransData),
+				MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
+
 			fclose(fp);
 
+
 		}
-		
+		/*
 		char parseBuffer[MAXLINE];
 		strcpy(parseBuffer, buffer);
 		int numTokens = 0;
@@ -151,6 +150,7 @@ int main() {
 					len);
 			printf("Outgoing Message2 : %s\n", buffer);
 		} 
+		*/
 	}
 	
 	close(sockfd);
