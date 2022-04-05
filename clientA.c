@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 
 #define MAXLINE 1024
-#define PORT 8088
+#define PORT 25494
 #define SA struct sockaddr
 
 //TCP Client
@@ -13,11 +13,11 @@
 void func(int sockfd, char* message)
 {
 	int n;
-	write(sockfd, message, 1024);
+	write(sockfd, message, MAXLINE);
 	printf("Sent to Server : %s\n", message);
 
 	bzero(message, MAXLINE);
-	read(sockfd, message, sizeof(message));
+	read(sockfd, message, MAXLINE);
 	printf("From Server : %s\n", message);
 
 }

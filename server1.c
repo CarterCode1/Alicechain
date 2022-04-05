@@ -9,8 +9,11 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 
-#define PORT	 8080
+#define SERVER_PORT	 24494
+#define PORT	21494
 #define MAXLINE 1024
+#define LOAD_DATA "LOAD_DATA"
+#define LOAD_DATA_ACK "LOAD_DATA_ACK"
 
 // Driver code
 int main() {
@@ -18,12 +21,13 @@ int main() {
 	bool isContinue = true;
 	int sockfd;
 	char buffer[MAXLINE];
-	char *loadTransData = "LoadTransData";
 	int maxTransId = -1;
 	char *filename = "block1.txt";
+	const char seperator[2] = " ";
+	char transaction[MAXLINE];
+	int len, n;
 
-
-	struct sockaddr_in servaddr, cliaddr;
+	struct sockaddr_in servaddr, clientaddr;
 	
 	// Creating socket file descriptor
 	if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
@@ -32,73 +36,105 @@ int main() {
 	}
 	
 	memset(&servaddr, 0, sizeof(servaddr));
-	memset(&cliaddr, 0, sizeof(cliaddr));
+	memset(&clientaddr, 0, sizeof(clientaddr));
 	
 	// Filling server information
 	servaddr.sin_family = AF_INET; // IPv4
 	servaddr.sin_addr.s_addr = INADDR_ANY;
-	servaddr.sin_port = htons(PORT);
-	
-	// Bind the socket with the server address
-	if ( bind(sockfd, (const struct sockaddr *)&servaddr,
-			sizeof(servaddr)) < 0 )
+	servaddr.sin_port = htons(SERVER_PORT);
+
+
+	// Filling client information
+	clientaddr.sin_family = AF_INET;
+	clientaddr.sin_port = htons(PORT);
+	clientaddr.sin_addr.s_addr = INADDR_ANY;
+
+	// Bind the socket with the client address
+	if ( bind(sockfd, (const struct sockaddr *)&clientaddr,
+			sizeof(clientaddr)) < 0 )
 	{
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
 
+	len = sizeof(servaddr); //len is value/resuslt
+	
+		
+	sendto(sockfd, (const char *)LOAD_DATA, strlen(LOAD_DATA),
+		MSG_CONFIRM, (const struct sockaddr *) &servaddr,
+			sizeof(servaddr));
 
-	
-	int len, n;
-	int loopControl = 0;
-	len = sizeof(cliaddr); //len is value/resuslt
-	
-	while(loopControl < 5)
+	FILE *fp = fopen(filename, "r");
+	if (fp == NULL)
 	{
-		const char seperator[2] = " ";
+		printf("Error: could not open file %s", filename);
+		return 1;
+	}
 
-		n = recvfrom(sockfd, (char *)buffer, MAXLINE,
-					MSG_WAITALL, ( struct sockaddr *) &cliaddr,
+
+	while (fgets(transaction, MAXLINE, fp))
+	{
+		//Send each transaction to middle server
+		sendto(sockfd, (const char *)transaction, strlen(transaction),
+			MSG_CONFIRM, (const struct sockaddr *) &servaddr, len);
+		
+		bzero(transaction, MAXLINE);
+	}
+
+	sendto(sockfd, (const char *)LOAD_DATA_ACK, strlen(LOAD_DATA_ACK),
+		MSG_CONFIRM, (const struct sockaddr *) &servaddr, len);
+
+	fclose(fp);
+
+	char parseBuffer[MAXLINE];
+	int numTokens = 0;
+
+	while(true)
+	{
+		//clear previous contents
+		bzero(buffer, MAXLINE);
+		bzero(parseBuffer, MAXLINE);
+		numTokens = 0;
+
+		n = recvfrom(sockfd, buffer, MAXLINE,
+					MSG_WAITALL, ( struct sockaddr *) &servaddr,
 					&len);
 		buffer[n] = '\0';
 		printf("Incoming Message : %s\n", buffer);
 		
+		strcpy(parseBuffer, buffer);
+		char* token = strtok(parseBuffer, seperator);
 		
-		// Request from ServerM to load initial data.
-		if(strcmp( loadTransData, buffer) == 0 )
+		while(token != NULL)
 		{
-			FILE *fp = fopen(filename, "r");
+			printf("%d\n", numTokens);
+			token = strtok(NULL, seperator );
+			numTokens++;
+		}
+		
+		if(numTokens == 4)
+		{
+			FILE *fp = fopen(filename, "a");
 			if (fp == NULL)
    			{
         		printf("Error: could not open file %s", filename);
         		return 1;
     		}
-
-			char transaction[MAXLINE];
-			printf("Exit:  %s", loadTransData );
-
-
-			while (fgets(transaction, MAXLINE, fp))
-			{
-				//Send each transaction to middle server
-				printf("%s", transaction );
-
-				sendto(sockfd, (const char *)transaction, strlen(transaction),
-					MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-				
-				bzero(transaction, MAXLINE);
-			}
-
-			printf("Exit: %s", loadTransData );
-			sendto(sockfd, (const char *)loadTransData, strlen(loadTransData),
-				MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-
+			fputs(buffer,fp);
+			fputs("\n", fp);
 			fclose(fp);
-
-
+	
+			printf("Writing Trans : %s\n", buffer);
 		}
+
+
+		printf("Outgoing Message : %s\n", buffer);
+
+		sendto(sockfd, (const char *)buffer, strlen(buffer),
+			MSG_CONFIRM, (const struct sockaddr *) &servaddr, len);			
+	}
 		/*
-		char parseBuffer[MAXLINE];
+
 		strcpy(parseBuffer, buffer);
 		int numTokens = 0;
 		char* token = strtok(parseBuffer, seperator);
@@ -150,9 +186,9 @@ int main() {
 					len);
 			printf("Outgoing Message2 : %s\n", buffer);
 		} 
-		*/
+		
 	}
-	
+	*/
 	close(sockfd);
 	
 	return 0;
