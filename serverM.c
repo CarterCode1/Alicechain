@@ -30,7 +30,7 @@ typedef struct  {
 } Transaction ;
 
 
-int numberOfTransactions = 0;
+
 
 void printTransactions(Transaction *transactions, int size)
 {
@@ -166,14 +166,15 @@ int getNextTransId(Transaction *transactions, int size)
 int main() {
 
 	Transaction transactions[MAX_TRANSACTIONS];
-	char buffer[MAXLINE];
+	int numberOfTransactions = 0;
 
-	int length;
+	char buffer[MAXLINE];
+	char messageBuffer[MAXLINE];
 	struct sockaddr_in servaddr;
 	fd_set readFDs;
 	
-	bool isContinue = true;
 	bool socketOption = TRUE;
+	bool isContinue = true;
 	int maxClients = 3;
 	int clientSockets[3];
 	int clientsConnected = 0;
@@ -183,10 +184,7 @@ int main() {
 	int activity;
 	int n;
 
-	int transactionId = -1;
-
-
-	printf("Server \n");
+	printf("The main server is up and running.\n");
 	//initialise all client_socket[] to 0 so not checked
     for (int i = 0; i < maxClients; i++) 
     {
@@ -221,9 +219,6 @@ int main() {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
-	printf("Listener on port %d \n", PORT);
-
-	length = sizeof(servaddr);
 
 	while(clientsConnected < maxClients)
 	{	
@@ -255,7 +250,6 @@ int main() {
 
 			buffer[n] = '\0';
 			
-			printf("%s\n",buffer);
 			if(strcmp(LOAD_DATA, buffer) == 0 ){
 				isContinue = true;
 				while(isContinue)
@@ -280,19 +274,22 @@ int main() {
 	sortTransactions(transactions, numberOfTransactions );
 
 	//-----TCP Server Vars--------------------------------
-	int sockFD_A, sockFD_B;
+	int sockFD_A, sockFD_B, maxSD;
 	int connFD_A, connFD_B;
+	int valueRead;
 	int lenA, lenB;
 	int numTokens = 0;
 	int currentBalance = 0;
 	int selectResult;
 
 	bool validCommand = true;
+	bool isServerA = true;
 	const char seperator[2] = " ";
-	int cycles = 0;
 	struct sockaddr_in servaddrA, cli_A;
 	struct sockaddr_in servaddrB, cli_B;
+	int connected_Tcp_Port;
 	fd_set tcp_read_fds;
+	Transaction tempTrans;
 
 	// TCP create socket  A 
 	sockFD_A = socket(AF_INET, SOCK_STREAM, 0);
@@ -300,7 +297,7 @@ int main() {
 		printf("socket A creation failed...\n");
 		exit(0);
 	}
-		// TCP create socket B
+	// TCP create socket B
 	sockFD_B = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockFD_B == -1) {
 		printf("socket B creation failed...\n");
@@ -335,8 +332,6 @@ int main() {
 		printf("Listen failed...\n");
 		exit(0);
 	}
-	else
-		printf("Server A listening..\n");
 
 	lenA = sizeof(cli_A);
 
@@ -345,46 +340,79 @@ int main() {
 		printf("Listen failed...\n");
 		exit(0);
 	}
-	else
-		printf("Server B listening..\n");
 
 	lenB = sizeof(cli_B);
 
 //----------------------- Server logic loop for handling incoming requests
 	for( ; ; )
 	{
+		//reset loop values
+		numTokens = 0;
+		currentBalance = 0;
+		bzero(buffer, MAXLINE);
+		bzero(messageBuffer, MAXLINE);
+		connected_Tcp_Port = 0;
+		validCommand = true;
+
 		FD_ZERO(&tcp_read_fds);
 		FD_SET(sockFD_A, &tcp_read_fds);
 		FD_SET(sockFD_B, &tcp_read_fds);
-			
-		selectResult = select(sockFD_B + 1,&tcp_read_fds, , NULL , NULL , NULL);
+		//determine the max socket value between A & B
+		maxSD = (sockFD_A > sockFD_B) ? sockFD_A : sockFD_B;
+
+		selectResult = select(sockFD_B + 1 ,&tcp_read_fds, NULL , NULL , NULL);
 
 	   	if(selectResult<0)
 		{
 			printf("select() failed\n");
 		}
 
-		if(selectResult > 0 ) {
+		if(FD_ISSET(sockFD_A, &tcp_read_fds))
+		{
+			connFD_A = accept(sockFD_A, (SA*)&servaddrA, &lenA);
+			if (connFD_A < 0) {
+				printf("server accept failed...\n");
+				exit(0);
+			}
+			isServerA = true;
 
-		// Accept the data packet from client and verification
-	connFD_A = accept(sockFD_A, (SA*)&cli_A, &lenA);
-	if (connFD_A < 0) {
-		printf("server accept failed...\n");
-		exit(0);
-	}
-	else
-		printf("server accept the client...\n");
+			
+			if(( valueRead = read(connFD_A, buffer, MAXLINE)) == 0 )
+			{
+				printf("connection A disconnected\n");
+				close(sockFD_A);
+				break;
+			}
 
+			getsockname(connFD_A , (struct sockaddr*)&servaddrA , (socklen_t*)&lenA);
+			connected_Tcp_Port = ntohs(servaddrA.sin_port);
+		}
 
+		if(FD_ISSET(sockFD_B, &tcp_read_fds))
+		{
+			connFD_B = accept(sockFD_B, (SA*)&servaddrB, &lenB);
+			if (connFD_B < 0) {
+				printf("server accept failed...\n");
+				exit(0);
+			}
 
-		numTokens = 0;
-		currentBalance = 0;
+			isServerA = false;
+
+			if(( valueRead = read(connFD_B, buffer, MAXLINE)) == 0 )
+			{
+				printf("connection B disconnected\n");
+				close(sockFD_B);
+				break;
+			}
+
+			getsockname(connFD_B , (struct sockaddr*)&servaddrB , (socklen_t*)&lenB);
+			connected_Tcp_Port = ntohs(servaddrB.sin_port);
+		}
+
+		printf("buffer: %s \n", buffer);
+		
 		//seed our random number. Well use this to choose between server 1-3
 		srand(time(0));
-
-		bzero(buffer, MAXLINE);
-
-		read(connFD_A, buffer, sizeof(buffer));
 
 		char parseBuffer[MAXLINE];
 		strcpy(parseBuffer, buffer);
@@ -401,24 +429,36 @@ int main() {
 		if(numTokens == 3)
 		{
 			int Id = getNextTransId(transactions, numberOfTransactions );
-			char strTransId[MAXLINE];
-			sprintf(strTransId, "%d", Id);
-			strcat(strTransId , seperator);
-			strcat(strTransId , buffer);
-			bzero(buffer, MAXLINE);
-			strcpy(buffer, strTransId);
-
-			Transaction tempTrans = parseTransactionString(buffer);
+			char tempBuffer[MAXLINE];
+	
+			strcpy(tempBuffer, buffer);
+			sprintf(buffer, "%d %s", Id, tempBuffer);
+			tempTrans = parseTransactionString(buffer);
+			sprintf(messageBuffer,"The main server received from \"%s\" to transfer %d coins to \"%s\" using TCP over port %d.\n", tempTrans.sendName, tempTrans.amount, tempTrans.recvName, connected_Tcp_Port);
+			printf("%s",messageBuffer );
 
 			if ( !isAccountValid(transactions, numberOfTransactions, tempTrans.sendName )) {
 				validCommand = false;
-				printf("sender invalid!\n");
+				bzero(messageBuffer, MAXLINE);
+				sprintf(messageBuffer, "Unable to proceed with the transaction as %s is not part of the network.", tempTrans.sendName );
+				printf("%s",messageBuffer );
 			}
 
 			if ( !isAccountValid(transactions, numberOfTransactions, tempTrans.recvName )) {
 				validCommand = false;
-				printf("receiver invalid!\n");
+				bzero(messageBuffer, MAXLINE);
+				sprintf(messageBuffer, "Unable to proceed with the transaction as %s is not part of the network.", tempTrans.recvName );
+				printf("%s",messageBuffer );
 			}
+
+			if (( !isAccountValid(transactions, numberOfTransactions, tempTrans.recvName )) 
+				&& ( !isAccountValid(transactions, numberOfTransactions, tempTrans.sendName )))
+				{
+					validCommand = false;
+					bzero(messageBuffer, MAXLINE);
+					sprintf(messageBuffer, "Unable to proceed with the transaction as %s and %s are not part of the network.", tempTrans.sendName, tempTrans.recvName );
+					printf("%s",messageBuffer );
+				}
 
 			currentBalance = calcTransBalance(transactions, numberOfTransactions,tempTrans.sendName );
 
@@ -442,13 +482,16 @@ int main() {
 			}
 			else
 			{
-				 bool isChkWalletFound = isAccountValid(transactions, numberOfTransactions, buffer );
+				sprintf(messageBuffer,"The main server received input= %s from client using TCP over port %d.\n", buffer, connected_Tcp_Port);
+				printf("%s",messageBuffer );
+				bool isChkWalletFound = isAccountValid(transactions, numberOfTransactions, buffer );
 
 				if(isChkWalletFound)
 				{
 					validCommand = true;
 					int balance = calcTransBalance(transactions, numberOfTransactions, buffer );
-					printf("%s has a current balance of: %d\n", buffer, balance);
+					bzero(messageBuffer, MAXLINE);
+					sprintf(messageBuffer, "The current balance of %s is : %d alicoins.\n", buffer, balance);
 				}
 				else
 				{
@@ -456,16 +499,36 @@ int main() {
 					printf("not found\n");
 				}
 			}
+			//If the command has been validate, we need to send to one of the 3 servers to write to the blockchain
+			if(validCommand)
+			{
+	
+				int serverNumber = (rand() % 3) ;
+				serverNumber = 2;
+
+				printf("The main server sent a request to server %d.\n", serverNumber);
+				sendto(UDPsocket, (const char *)buffer, MAXLINE, 
+				MSG_CONFIRM, (const struct sockaddr *) &client_addr[serverNumber],
+					clientLen[serverNumber]);
+
+				bzero(buffer, MAXLINE);
+				n = recvfrom(UDPsocket, buffer, MAXLINE, MSG_WAITALL, (struct sockaddr*)&client_addr[serverNumber], &clientLen[serverNumber]);
+
+				buffer[n] = '\0';
+				printf("buffer %s\n",buffer );
+
+			}
 		}
 
 		printf("command: %s\n", buffer);	
-		//printTransactions(transactions, numberOfTransactions );
+		printTransactions(transactions, numberOfTransactions );
 
 		if(validCommand) {
-
+	
 			int serverNumber = (rand() % 3) ;
 			serverNumber = 2;
 
+			printf("The main server sent a request to server %d.\n", serverNumber);
 			sendto(UDPsocket, (const char *)buffer, MAXLINE, 
 			MSG_CONFIRM, (const struct sockaddr *) &client_addr[serverNumber],
 				clientLen[serverNumber]);
@@ -475,157 +538,24 @@ int main() {
 
 			buffer[n] = '\0';
 			printf("buffer %s\n",buffer );
+		}
+
+		printf(" Command was %s\n", validCommand ? "true" : "false");
+
+		if(isServerA) {
 			write(connFD_A, buffer, MAXLINE);
 		}
-		cycles++;
-	}
-
-
-
-
-	/*
-	printTransactions(transactions, numberOfTransactions );
-	printf("-----------\n");
-
-	SortTransactions(transactions, numberOfTransactions );
-	printTransactions(transactions, numberOfTransactions );
-	int balance = calcTransBalance(transactions, numberOfTransactions, "Chinmay" );
-
-	if(isAccountValid(transactions, numberOfTransactions, "Chinmay" ))
-	{
-		printf("True\n");
-	}
-
-	if(isAccountValid(transactions, numberOfTransactions, "Greg" ))
-	{
-		printf("True\n");
-	}
-
-	printf("Balance: %d\n", balance );
-
-	//set up the  tcp socket to receive message
-	int sockfdA, connfdA, lenA;
-    struct sockaddr_in servaddrA, cliA;
-	// socket create and verification
-	sockfdA = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfdA == -1) {
-		printf("socket creation failed...\n");
-		exit(0);
-	}
-	else
-	{
-		printf("Socket successfully created..\n");
-	}
-
-	bzero(&servaddrA, sizeof(servaddrA));
-	
-	// assign IP, PORT
-	servaddrA.sin_family = AF_INET;
-	servaddrA.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddrA.sin_port = htons(TCP_PORT);
-
-		// Binding newly created socket to given IP and verification
-	if ((bind(sockfdA, (SA*)&servaddrA, sizeof(servaddrA))) != 0) {
-		printf("socket bind failed...\n");
-		exit(0);
-	}
-	else
-	{
-		printf("Socket successfully binded..\n");
-	}
-
-	// Now server is ready to listen and verification
-	if ((listen(sockfdA, 5)) != 0) {
-		printf("Listen failed...\n");
-		exit(0);
-	}
-	else
-	{
-		printf("Server listening..\n");
-	}
-	lenA = sizeof(cliA);
-
-
-
-	// Accept the data packet from client and verification
-	connfdA = accept(sockfdA, (SA*)&cliA, &lenA);
-	if (connfdA < 0) {
-		printf("server accept failed...\n");
-		exit(0);
-	}
-	else
-	{
-		printf("server accept the client...\n");
-	}
-
-	// infinite loop for sending and receiving messages
-	while(isContinue)
-	{
-		int numTokens = 0;
-		int testInt = 0;
-		const char seperator[2] = " ";
-
-		bzero(buffer, MAXLINE);
-
-		// read the message from client and copy it in buffer
-		testInt = read(connfdA, buffer, sizeof(buffer));
-		// print buffer which contains the client contents
-		// printf("From client: %s \n", buffer);
-
-		int m, len;
-
-
-
-		printf("Value Check : %s : %s \n", buffer, parseBuffer);
-		printf("Num of tokens %d\n", numTokens );
-
-		//This signals a TXCOINS operation.  Add a transaction Id to beginning of tthe buffer string 
-		if(numTokens == 3)
-		{
-			char strTransId[MAXLINE];
-			sprintf(strTransId, "%d", ++transactionId);
-			strcat(strTransId , seperator);
-			strcat(strTransId , buffer);
-			bzero(buffer, MAXLINE);
-			strcpy(buffer, strTransId);
-		}
-
-	 	printf("Add TransactionId: %s \n", buffer);
-
-
-		sendto(sockfd1, (const char *)buffer, strlen(buffer),
-			MSG_CONFIRM, (const struct serv1addr *) &serv1addr,
-			sizeof(serv1addr));
-		
-		printf("Message sent to server: %s \n", buffer);
-		bzero(buffer, MAXLINE);
-		
-		m = recvfrom(sockfd1, (char *)buffer, MAXLINE,
-				MSG_WAITALL, (struct serv1addr *) &serv1addr,
-				&len);
-				
-		buffer[m] = '\0';
-		printf("From Server : %s\n", buffer);
-
-
-
-
-		// and send that buffer to client
-		write(connfdA, buffer, sizeof(buffer));
-
-		printf("Message sent to client : %s\n", buffer);
-		// if msg contains "Exit" then server exit and chat ended.
-		if (strncmp("exit", buffer, 4) == 0) {
-			isContinue = false;
-			printf("Server Exit ...\n");
-			break;
+		else {
+			write(connFD_B, buffer, MAXLINE);
 		}
 	}
-	*/
 
 	close(UDPsocket);
 	close(sockFD_A);
+	close(sockFD_B);
 
 
 	return 0;
+
 }
+

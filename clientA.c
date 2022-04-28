@@ -28,8 +28,6 @@ int main(int argc, char *argv[])
 	struct sockaddr_in servaddr, cli;
 	char sendBuffer[MAXLINE];
 
-	printf("Program name %s\n", argv[0]);
-
 	if(argc == 2)
 	{
 		printf("Check Wallet Operation for %s\n", argv[1]);
@@ -40,7 +38,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		printf("Invalid number of arguements.");
+		printf("Invalid number of arguements.\n");
 		exit(0);
 	}
 
